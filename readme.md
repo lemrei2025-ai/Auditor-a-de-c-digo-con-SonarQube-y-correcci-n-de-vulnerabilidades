@@ -1,8 +1,7 @@
 # Auditoría de código con SonarQube y corrección de vulnerabilidades
 
 **Módulo:** Desarrollo seguro, criptografía e IAM
-**Semana:** 2 — Programación segura y herramientas de desarrollo seguro
-**Modalidad:** laboratorio guiado, individual o en parejas
+**Modalidad:** laboratorio individual 
 **Duración estimada:** 6 horas (2 de sesión guiada + 4 de trabajo autónomo)
 
 ---
