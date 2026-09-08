@@ -1,7 +1,8 @@
-# Auditoría de código con SonarQube y corrección de vulnerabilidades
+# Semana 2 · Auditoría de código con SonarQube y corrección de vulnerabilidades
 
 **Módulo:** Desarrollo seguro, criptografía e IAM
-**Modalidad:** laboratorio individual 
+**Semana:** 2 — Programación segura y herramientas de desarrollo seguro
+**Modalidad:** laboratorio guiado, individual o en parejas
 **Duración estimada:** 6 horas (2 de sesión guiada + 4 de trabajo autónomo)
 
 ---
@@ -24,14 +25,15 @@ Al terminar, el estudiante estará en capacidad de:
 
 | Requisito | Detalle |
 |---|---|
-| Computador | Mínimo 8 GB de RAM (SonarQube usa ~2 GB), 10 GB de disco libre |
-| Docker | Docker Desktop (Windows/macOS) o Docker Engine (Linux), el mismo que se usó para instalar Keycloak |
-| Git | Para descargar el código de la aplicación |
-| Navegador | Chrome, Firefox o Edge |
-| Editor de código | Visual Studio Code (recomendado) |
+| Sistema operativo | **Kali Linux** (instalación nativa o máquina virtual). Si es máquina virtual: mínimo 4 vCPU, 8 GB de RAM asignados y 25 GB de disco |
+| Docker | Docker Engine instalado desde los repositorios de Kali (Paso 1); es el mismo que se usó para Keycloak |
+| Git | Viene preinstalado en Kali |
+| Navegador | Firefox ESR (preinstalado en Kali) |
+| Editor de código | Cualquiera: `mousepad` o `nano` (preinstalados) o VS Code (`sudo apt install -y code-oss`) |
+| OWASP ZAP | Viene preinstalado en Kali (menú *03 - Web Application Analysis → zaproxy*). En esta guía se usa la versión en Docker para automatizar el reporte, pero puede usarse la gráfica |
 | Lecturas previas | [OWASP Prácticas de Codificación Segura (español)](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-es/) y [OWASP Top 10:2021 – A03 Inyección](https://owasp.org/Top10/2021/es/A03_2021-Injection/) |
 
-> **Nota:** todos los comandos se ejecutan en una terminal. En Windows se recomienda usar **PowerShell** o la terminal de **WSL2**; en macOS y Linux, la terminal normal. Cuando un comando cambie según el sistema operativo se indica explícitamente.
+> **Nota:** todos los comandos se ejecutan en la **terminal de Kali** (icono de terminal en la barra superior o `Ctrl+Alt+T`). Los comandos que empiezan por `sudo` piden la contraseña del usuario de Kali (por defecto `kali` si se usó la imagen oficial de máquina virtual). Al escribir la contraseña no se muestran caracteres; es normal.
 
 ---
 
@@ -47,43 +49,70 @@ Al terminar, el estudiante estará en capacidad de:
 
 ## 4. Paso a paso
 
-### Paso 1. Preparar el entorno de trabajo
+### Paso 1. Preparar Kali Linux y Docker
 
-1. El estudiante crea una carpeta de trabajo y entra en ella:
+1. El estudiante actualiza la lista de paquetes de Kali:
 
    ```bash
-   mkdir semana2-sonarqube
-   cd semana2-sonarqube
+   sudo apt update
    ```
 
-2. Verifica que Docker funciona:
+2. Comprueba si Docker ya está instalado (quedó instalado si se hizo el laboratorio de Keycloak):
 
    ```bash
    docker --version
+   ```
+
+   Si responde algo como `Docker version 27...`, salta al numeral 5. Si responde `command not found`, continúa con el numeral 3.
+
+3. Instala Docker desde los repositorios de Kali:
+
+   ```bash
+   sudo apt install -y docker.io docker-compose
+   sudo systemctl enable --now docker
+   ```
+
+4. Permite que el usuario actual use Docker sin `sudo`:
+
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+   **Importante:** para que el cambio aplique hay que cerrar la sesión y volver a entrar (o reiniciar la máquina virtual). Después de volver a entrar, el siguiente comando debe funcionar sin error:
+
+   ```bash
    docker ps
    ```
 
-   Si el segundo comando muestra un error de conexión, debe abrir Docker Desktop y esperar a que indique *"Docker is running"*.
+   Si aparece `permission denied`, es que no se cerró la sesión; como alternativa temporal se puede ejecutar `newgrp docker` en la terminal.
 
-3. Crea una red de Docker para que los contenedores del laboratorio se comuniquen entre sí por nombre:
+5. SonarQube necesita aumentar un límite del kernel de Linux. Se aplica ahora y se deja fijo para futuros reinicios:
+
+   ```bash
+   sudo sysctl -w vm.max_map_count=262144
+   echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+   ```
+
+   Verifica que quedó aplicado (debe mostrar `262144`):
+
+   ```bash
+   sysctl vm.max_map_count
+   ```
+
+6. Crea la carpeta de trabajo y entra en ella:
+
+   ```bash
+   mkdir -p ~/semana2-sonarqube
+   cd ~/semana2-sonarqube
+   ```
+
+7. Crea una red de Docker para que los contenedores del laboratorio se comuniquen entre sí por nombre:
 
    ```bash
    docker network create sonarnet
    ```
 
-4. **Solo en Linux y en Windows con WSL2:** SonarQube necesita aumentar un límite del kernel. En Linux:
-
-   ```bash
-   sudo sysctl -w vm.max_map_count=262144
-   ```
-
-   En Windows con Docker Desktop (PowerShell como administrador):
-
-   ```powershell
-   wsl -d docker-desktop sysctl -w vm.max_map_count=262144
-   ```
-
-   En macOS este paso no es necesario.
+   Si responde que la red ya existe, no pasa nada; se puede continuar.
 
 ### Paso 2. Instalar y arrancar SonarQube
 
@@ -101,7 +130,7 @@ Al terminar, el estudiante estará en capacidad de:
 
    Cuando aparezca la línea `SonarQube is operational`, presiona `Ctrl+C` para salir del registro (el contenedor sigue funcionando).
 
-3. Abre en el navegador: <http://localhost:9000>
+3. Abre Firefox y entra a <http://localhost:9000> (o desde la terminal: `firefox http://localhost:9000 &`).
 
 4. Inicia sesión con el usuario **admin** y la contraseña **admin**. SonarQube obligará a cambiar la contraseña: el estudiante define una nueva y la anota, la necesitará durante todo el laboratorio.
 
@@ -138,7 +167,7 @@ Al terminar, el estudiante estará en capacidad de:
 
 ### Paso 5. Configurar y ejecutar el análisis
 
-1. Dentro de la carpeta `juice-shop`, crea un archivo llamado `sonar-project.properties` con el siguiente contenido (puede usar VS Code o el Bloc de notas; el archivo no debe tener extensión `.txt`):
+1. Dentro de la carpeta `juice-shop`, crea un archivo llamado `sonar-project.properties`. Puede hacerlo con `nano sonar-project.properties` (para guardar: `Ctrl+O`, `Enter`, y salir con `Ctrl+X`) o con `mousepad sonar-project.properties &`. El contenido es:
 
    ```properties
    sonar.projectKey=juice-shop-semana2
@@ -151,8 +180,6 @@ Al terminar, el estudiante estará en capacidad de:
 
 2. Ejecuta el escáner. Reemplaza `TOKEN_AQUI` por el token copiado en el Paso 4.
 
-   En **Linux / macOS / WSL2**:
-
    ```bash
    docker run --rm --network sonarnet \
      -e SONAR_HOST_URL="http://sonarqube:9000" \
@@ -161,15 +188,7 @@ Al terminar, el estudiante estará en capacidad de:
      sonarsource/sonar-scanner-cli
    ```
 
-   En **Windows PowerShell**:
-
-   ```powershell
-   docker run --rm --network sonarnet `
-     -e SONAR_HOST_URL="http://sonarqube:9000" `
-     -e SONAR_TOKEN="TOKEN_AQUI" `
-     -v "${PWD}:/usr/src" `
-     sonarsource/sonar-scanner-cli
-   ```
+   (Las barras `\` al final de cada línea solo indican que el comando continúa; puede escribirse todo en una sola línea sin ellas.)
 
 3. El análisis tarda entre 5 y 15 minutos según el equipo. Termina cuando aparece `EXECUTION SUCCESS`. Si aparece `EXECUTION FAILURE`, consultar la sección 7 (Solución de problemas).
 
@@ -207,7 +226,7 @@ Para cada hallazgo, el estudiante registra en una tabla: archivo y línea, regla
    git checkout -b correcciones-semana2
    ```
 
-2. Abre el archivo en VS Code y aplica la corrección. Orientación por tipo de hallazgo:
+2. Abre el archivo con el editor (`mousepad routes/login.ts &`, o `code-oss .` si instaló VS Code) y aplica la corrección. Orientación por tipo de hallazgo:
 
    - **Inyección SQL:** nunca construir la consulta pegando texto del usuario. Usar consultas parametrizadas. En Juice Shop, que utiliza Sequelize, esto significa reemplazar la concatenación por el parámetro `replacements` o por el método de consulta con objetos (`where: { email, password }`).
    - **Criptografía débil (MD5/SHA-1):** reemplazar por un algoritmo vigente. Para contraseñas, una función lenta como bcrypt o Argon2; para integridad, SHA-256 o superior.
@@ -260,9 +279,9 @@ Esta parte muestra que hay problemas que solo se ven con la aplicación en march
      zap-baseline.py -t http://juice-shop:3000 -r reporte-zap.html
    ```
 
-   En PowerShell cambiar `"$(pwd):/zap/wrk"` por `"${PWD}:/zap/wrk"` y el salto de línea `\` por `` ` ``.
+   **Alternativa con el ZAP gráfico de Kali:** abrir *Aplicaciones → 03 - Web Application Analysis → zaproxy*, elegir *Automated Scan*, escribir `http://localhost:3000` en "URL to attack", pulsar *Attack* y al terminar exportar el reporte desde *Report → Generate Report*. El resultado es equivalente; la versión en Docker se propone porque deja el archivo HTML sin pasos manuales.
 
-3. Abre el archivo `reporte-zap.html` que quedó en la carpeta actual y responde en el informe:
+3. Abre el archivo `reporte-zap.html` que quedó en la carpeta actual (`firefox reporte-zap.html &`) y responde en el informe:
    - ¿Qué alertas de nivel *Medium* o *High* reporta ZAP?
    - Elige una alerta que **no** haya aparecido en SonarQube (por ejemplo cabeceras de seguridad faltantes o configuración de cookies) y explica por qué un analizador estático no la detecta.
 
@@ -312,12 +331,15 @@ El estudiante sube a la tarea de Moodle (o a su repositorio de GitHub del curso)
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| SonarQube se reinicia solo o los logs dicen `max virtual memory areas vm.max_map_count [65530] is too low` | Falta el ajuste del kernel | Ejecutar el comando del Paso 1.4 y reiniciar el contenedor: `docker restart sonarqube` |
+| `docker ps` responde `permission denied while trying to connect to the Docker daemon socket` | El usuario no está en el grupo `docker` o no se reinició la sesión | Ejecutar `sudo usermod -aG docker $USER`, cerrar sesión y volver a entrar (o `newgrp docker`) |
+| `Cannot connect to the Docker daemon` | El servicio de Docker está detenido | `sudo systemctl start docker` |
+| SonarQube se reinicia solo o los logs dicen `max virtual memory areas vm.max_map_count [65530] is too low` | Falta el ajuste del kernel | Ejecutar los comandos del Paso 1.5 y reiniciar el contenedor: `docker restart sonarqube` |
+| La máquina virtual se congela durante el análisis | Poca RAM asignada | Apagar la VM y asignarle al menos 8 GB de RAM y 4 vCPU en VirtualBox/VMware; cerrar Keycloak mientras corre SonarQube (`docker stop keycloak`) |
 | `http://localhost:9000` no carga | SonarQube aún está arrancando | Esperar y revisar `docker logs -f sonarqube` hasta ver `SonarQube is operational` |
 | El escáner dice `Not authorized` o `401` | Token incorrecto o expirado | Generar un token nuevo en SonarQube: **My Account → Security → Generate Tokens** |
 | El escáner dice `Connection refused` a `sonarqube:9000` | El contenedor no está en la red `sonarnet` | Verificar con `docker network inspect sonarnet`; si falta, recrear SonarQube con la opción `--network sonarnet` |
 | El escáner se queda sin memoria (`OutOfMemoryError`) | Proyecto grande | Añadir `-e SONAR_SCANNER_OPTS="-Xmx2g"` al comando de Docker y verificar que las exclusiones del archivo `.properties` estén escritas correctamente |
-| `sonar-project.properties` no se reconoce | Se guardó como `.txt` | Renombrar el archivo quitando la extensión `.txt` (en Windows activar "mostrar extensiones de archivo") |
+| `sonar-project.properties` no se reconoce | El archivo quedó con otro nombre o en otra carpeta | Verificar con `ls -la ~/semana2-sonarqube/juice-shop/sonar-project.properties` y que el comando del escáner se ejecute desde esa carpeta |
 | Puerto 9000 o 3000 ocupado | Otro servicio lo usa | Cambiar el puerto de la izquierda: `-p 9001:9000` y abrir `http://localhost:9001` |
 | ZAP no llega a `juice-shop:3000` | Juice Shop no está en `sonarnet` | Recrear el contenedor con `--network sonarnet` como en el Paso 10.1 |
 
@@ -332,6 +354,8 @@ El estudiante sube a la tarea de Moodle (o a su repositorio de GitHub del curso)
 - [OWASP Developer Guide – Verificación: herramientas (ES)](https://devguide.owasp.org/es/06-verification/02-tools/)
 - [OWASP Juice Shop – Proyecto (EN)](https://owasp.org/www-project-juice-shop/)
 - [OWASP ZAP (EN)](https://www.zaproxy.org/)
+- [Kali Linux – Herramienta zaproxy (EN)](https://www.kali.org/tools/zaproxy/)
+- [Kali Linux – Documentación oficial (EN)](https://www.kali.org/docs/)
 - [INCIBE-CERT – Fuzzing y testing (ES)](https://www.incibe.es/incibe-cert/blog/fuzzing-y-testing-sistemas-control-industrial)
 
 ---
